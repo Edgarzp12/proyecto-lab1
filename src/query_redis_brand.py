@@ -1,16 +1,33 @@
+"""
+Consulta en Redis:
+Suma ingresos por marca y determina cuál generó más dinero.
+"""
+
 import redis
+import json
 from config import REDIS_HOST, REDIS_PORT
-from collections import defaultdict
 
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
-revenue = defaultdict(float)
-keys = r.keys("transaction:*")
+marcas = {}
 
-for key in keys:
-    brand = r.hget(key, "brand")
-    price = float(r.hget(key, "price"))
-    revenue[brand] += price
+# Recorrer las ventas almacenadas
+for key in r.scan_iter("sale:*"):
 
-top = max(revenue.items(), key=lambda x: x[1])
-print("Marca con más ingresos:", top)
+    data = json.loads(r.get(key))
+    marca = data.get("brand")
+    price = data.get("price", 0)
+
+    if marca is None:
+        continue
+
+    marcas[marca] = marcas.get(marca, 0) + float(price)
+
+# Evaluar resultados
+if marcas:
+    marca_top = max(marcas, key=marcas.get)
+    ingresos = round(marcas[marca_top], 2)
+    print(f"La marca con más ingresos fue '{marca_top}' con ${ingresos}.")
+else:
+    print("No se encontraron marcas.")
+
